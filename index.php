@@ -529,7 +529,7 @@ if (isset($_GET['action'])) {
       <div class="card" style="max-width:500px; margin-top:1.5rem;">
         <p>Email: support@kasitrade.co.za</p>
         <p>WhatsApp: +27 67 064 3457</p>
-        <p>📍 Based in Midrand, Johannesburg</p>
+        <p>Based in Midrand, Johannesburg</p>
       </div>
     </section>
 
