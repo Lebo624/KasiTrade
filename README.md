@@ -1,6 +1,6 @@
 # KasiTrade
 
-A C2C e-commerce platform built for South African township communities.
+A C2C e-commerce platform built for South African township communities and small suburbs.
 
 ## Features
 
@@ -19,9 +19,15 @@ A C2C e-commerce platform built for South African township communities.
 ## Setup
 
 1. Import `schema.sql` into your MySQL database.
-2. Copy `includes/db.example.php` to `includes/db.php` and enter your credentials.
+2. Copy`includes/db.php` and enter your credentials.
 3. Deploy the whole folder to a PHP-enabled web server (e.g., InfinityFree, XAMPP).
+
+## Register
+
+- **User:** user name / user email / set password
 
 ## Login
 
-- **Admin:** admin@kasitrade.co.za / admin123
+- **User:** user email / user password
+
+- **Admin:** credentials present in user manual
