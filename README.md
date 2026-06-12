@@ -21,6 +21,7 @@ A C2C e-commerce platform built for South African township communities and small
 1. Import `schema.sql` into your MySQL database.
 2. Copy `includes/db.example.php` in `includes/db.php` and enter your credentials.
 3. Deploy the whole folder to a PHP-enabled web server (e.g., InfinityFree, XAMPP).
+4. Deploy the index.php (includes JS and CSS code) into your `htdocs`.
 
 ## Register
 
