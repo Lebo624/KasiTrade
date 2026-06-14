@@ -28,66 +28,54 @@ if (isset($_GET['action'])) {
     header('Content-Type: application/json');
     $action = $_GET['action'];
 
-        if ($action === 'register') {
+    if ($action === 'register') {
         if (!empty($_FILES) && isset($_FILES['image'])) {
-            $name    = trim($_POST['name'] ?? '');
+            $name = trim($_POST['name'] ?? '');
             $surname = trim($_POST['surname'] ?? '');
-            $email   = trim($_POST['email'] ?? '');
+            $email = trim($_POST['email'] ?? '');
             $password = $_POST['password'] ?? '';
         } else {
             $raw = json_decode(file_get_contents('php://input'), true);
-            $name    = trim($raw['name'] ?? '');
+            $name = trim($raw['name'] ?? '');
             $surname = trim($raw['surname'] ?? '');
-            $email   = trim($raw['email'] ?? '');
+            $email = trim($raw['email'] ?? '');
             $password = $raw['password'] ?? '';
         }
 
         if (!$name || !$surname || !$email || !$password) {
-            http_response_code(400);
-            echo json_encode(['error' => 'All fields required']);
-            exit;
+            http_response_code(400); echo json_encode(['error' => 'All fields required']); exit;
         }
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Invalid email']);
-            exit;
+            http_response_code(400); echo json_encode(['error' => 'Invalid email']); exit;
         }
 
         $stmt = $pdo->prepare('SELECT id FROM users WHERE email = ?');
         $stmt->execute([$email]);
-        if ($stmt->fetch()) {
-            http_response_code(409);
-            echo json_encode(['error' => 'Email already registered']);
-            exit;
-        }
+        if ($stmt->fetch()) { http_response_code(409); echo json_encode(['error' => 'Email already registered']); exit; }
 
         $hash = password_hash($password, PASSWORD_DEFAULT);
         $stmt = $pdo->prepare('INSERT INTO users (name, surname, email, password_hash) VALUES (?, ?, ?, ?)');
         $stmt->execute([$name, $surname, $email, $hash]);
         $newUserId = $pdo->lastInsertId();
 
-        // Handle profile picture upload if present
         $profileImage = null;
         if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
             $file = $_FILES['image'];
             $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-            if (in_array($ext, ['jpg','jpeg','png','webp'])) {
-                if ($file['size'] <= 2 * 1024 * 1024) {
-                    $newName = 'profile_' . $newUserId . '_' . time() . '.' . $ext;
-                    $uploadDir = __DIR__ . '/uploads/profiles/';
-                    if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-                    $dest = $uploadDir . $newName;
-                    if (move_uploaded_file($file['tmp_name'], $dest)) {
-                        $profileImage = 'uploads/profiles/' . $newName;
-                        $upd = $pdo->prepare('UPDATE users SET profile_image = ? WHERE id = ?');
-                        $upd->execute([$profileImage, $newUserId]);
-                    }
+            if (in_array($ext, ['jpg','jpeg','png','webp']) && $file['size'] <= 2 * 1024 * 1024) {
+                $newName = 'profile_' . $newUserId . '_' . time() . '.' . $ext;
+                $uploadDir = __DIR__ . '/uploads/profiles/';
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+                $dest = $uploadDir . $newName;
+                if (move_uploaded_file($file['tmp_name'], $dest)) {
+                    $profileImage = 'uploads/profiles/' . $newName;
+                    $stmt = $pdo->prepare('UPDATE users SET profile_image = ? WHERE id = ?');
+                    $stmt->execute([$profileImage, $newUserId]);
                 }
             }
         }
 
-        echo json_encode(['success' => true, 'message' => 'Registration successful']);
-        exit;
+        echo json_encode(['success' => true, 'message' => 'Registration successful']); exit;
     }
 
     if ($action === 'login') {
@@ -113,10 +101,15 @@ if (isset($_GET['action'])) {
     if ($action === 'editProfile') {
         requireLogin();
         $data = json_decode(file_get_contents('php://input'), true);
-        $currentPassword = $data['currentPassword'] ?? ''; $newName = trim($data['name'] ?? ''); $newSurname = trim($data['surname'] ?? ''); $newPassword = $data['newPassword'] ?? '';
+        $currentPassword = $data['currentPassword'] ?? '';
+        $newName = trim($data['name'] ?? '');
+        $newSurname = trim($data['surname'] ?? '');
+        $newPassword = $data['newPassword'] ?? '';
+
         $stmt = $pdo->prepare('SELECT password_hash FROM users WHERE id = ?'); $stmt->execute([getCurrentUser()['id']]);
         $user = $stmt->fetch();
         if (!password_verify($currentPassword, $user['password_hash'])) { http_response_code(403); echo json_encode(['error' => 'Current password incorrect']); exit; }
+
         $update = ['name = ?', 'surname = ?']; $params = [$newName, $newSurname];
         if ($newPassword) { $update[] = 'password_hash = ?'; $params[] = password_hash($newPassword, PASSWORD_DEFAULT); }
         $params[] = getCurrentUser()['id'];
@@ -134,7 +127,8 @@ if (isset($_GET['action'])) {
         if ($search) { $sql .= ' AND (p.name LIKE ? OR u.name LIKE ?)'; $params[] = "%$search%"; $params[] = "%$search%"; }
         if ($category) { $sql .= ' AND p.category = ?'; $params[] = $category; }
         $sql .= ' AND p.price BETWEEN ? AND ?'; $params[] = $minPrice; $params[] = $maxPrice;
-        $stmt = $pdo->prepare($sql); $stmt->execute($params); $products = $stmt->fetchAll();
+        $stmt = $pdo->prepare($sql); $stmt->execute($params);
+        $products = $stmt->fetchAll();
         if (isLoggedIn()) {
             $userId = getCurrentUser()['id'];
             $favStmt = $pdo->prepare('SELECT product_id FROM favorites WHERE user_id = ?'); $favStmt->execute([$userId]);
@@ -271,27 +265,26 @@ if (isset($_GET['action'])) {
         echo json_encode($stmt->fetchAll()); exit;
     }
 
-    // ---------- NEW: Profile picture upload ----------
+    if ($action === 'adminToggleVerification') {
+        requireAdmin();
+        $data = json_decode(file_get_contents('php://input'), true); $userId = $data['user_id'] ?? 0;
+        $stmt = $pdo->prepare('UPDATE users SET is_verified = NOT is_verified WHERE id = ?');
+        $stmt->execute([$userId]);
+        echo json_encode(['success' => true]); exit;
+    }
+
     if ($action === 'uploadProfilePicture') {
         requireLogin();
-        if (!isset($_FILES['image']) || $_FILES['image']['error'] !== UPLOAD_ERR_OK) {
-            http_response_code(400); echo json_encode(['error' => 'No file uploaded']); exit;
-        }
+        if (!isset($_FILES['image']) || $_FILES['image']['error'] !== UPLOAD_ERR_OK) { http_response_code(400); echo json_encode(['error' => 'No file uploaded']); exit; }
         $file = $_FILES['image'];
         $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-        if (!in_array($ext, ['jpg','jpeg','png','webp'])) {
-            http_response_code(400); echo json_encode(['error' => 'Invalid file type']); exit;
-        }
-        if ($file['size'] > 2 * 1024 * 1024) {
-            http_response_code(400); echo json_encode(['error' => 'Image too large (max 2MB)']); exit;
-        }
+        if (!in_array($ext, ['jpg','jpeg','png','webp'])) { http_response_code(400); echo json_encode(['error' => 'Invalid file type']); exit; }
+        if ($file['size'] > 2 * 1024 * 1024) { http_response_code(400); echo json_encode(['error' => 'Image too large (max 2MB)']); exit; }
         $newName = 'profile_' . getCurrentUser()['id'] . '_' . time() . '.' . $ext;
         $uploadDir = __DIR__ . '/uploads/profiles/';
         if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
         $dest = $uploadDir . $newName;
-        if (!move_uploaded_file($file['tmp_name'], $dest)) {
-            http_response_code(500); echo json_encode(['error' => 'Failed to save file']); exit;
-        }
+        if (!move_uploaded_file($file['tmp_name'], $dest)) { http_response_code(500); echo json_encode(['error' => 'Failed to save file']); exit; }
         $imagePath = 'uploads/profiles/' . $newName;
         $stmt = $pdo->prepare('UPDATE users SET profile_image = ? WHERE id = ?');
         $stmt->execute([$imagePath, getCurrentUser()['id']]);
@@ -299,27 +292,22 @@ if (isset($_GET['action'])) {
         echo json_encode(['success' => true, 'image' => $imagePath]); exit;
     }
 
-    // ---------- NEW: Send message ----------
     if ($action === 'sendMessage') {
         requireLogin();
         $data = json_decode(file_get_contents('php://input'), true);
-        $orderId = $data['order_id'] ?? 0;
-        $message = trim($data['message'] ?? '');
-        $receiverId = $data['receiver_id'] ?? 0;
+        $orderId = $data['order_id'] ?? 0; $message = trim($data['message'] ?? ''); $receiverId = $data['receiver_id'] ?? 0;
         if (!$orderId || !$message || !$receiverId) { http_response_code(400); echo json_encode(['error' => 'Missing fields']); exit; }
         $stmt = $pdo->prepare('INSERT INTO messages (order_id, sender_id, receiver_id, message) VALUES (?,?,?,?)');
         $stmt->execute([$orderId, getCurrentUser()['id'], $receiverId, $message]);
         echo json_encode(['success' => true]); exit;
     }
 
-    // ---------- NEW: Get messages ----------
     if ($action === 'getMessages') {
         requireLogin();
         $orderId = $_GET['order_id'] ?? 0;
         $stmt = $pdo->prepare('SELECT m.*, u.name AS sender_name FROM messages m JOIN users u ON m.sender_id = u.id WHERE m.order_id = ? ORDER BY m.created_at ASC');
         $stmt->execute([$orderId]);
         $messages = $stmt->fetchAll();
-        // Mark as read
         $stmt = $pdo->prepare('UPDATE messages SET is_read = 1 WHERE order_id = ? AND receiver_id = ? AND is_read = 0');
         $stmt->execute([$orderId, getCurrentUser()['id']]);
         echo json_encode($messages); exit;
@@ -348,8 +336,8 @@ if (isset($_GET['action'])) {
     .header-inner { display:flex; align-items:center; justify-content:space-between; height:70px; }
     .logo { font-size:2rem; font-weight:800; color:var(--accent); }
     .logo span { color:#fff; }
-    .nav-links { display: flex; gap: 1.8rem; list-style: none; align-items: center;}
-    .nav-links a {color: #cccccc; font-weight: 600; font-size: 0.95rem; padding: 0.5rem 0.2rem; border-bottom: 3px solid transparent; transition: all var(--transition); cursor: pointer; position: relative; text-decoration: none;        }
+    .nav-links { display:flex; gap:1.8rem; list-style:none; align-items:center; }
+    .nav-links a { color:#ccc; font-weight:600; font-size:0.95rem; padding:0.5rem 0.2rem; border-bottom:3px solid transparent; transition:all var(--transition); cursor:pointer; position:relative; }
     .nav-links a:hover,.nav-links a.active { color:#fff; border-bottom-color:var(--accent); }
     .badge-pill { position:absolute; top:-8px; right:-16px; background:var(--accent); color:#fff; border-radius:12px; padding:0.1rem 0.5rem; font-size:0.7rem; font-weight:700; min-width:18px; text-align:center; }
     .menu-toggle { display:none; background:none; border:none; color:#fff; font-size:2rem; cursor:pointer; }
@@ -405,14 +393,11 @@ if (isset($_GET['action'])) {
     .image-preview { max-width:160px; max-height:100px; margin-top:0.5rem; border-radius:10px; display:none; }
     .notif-item { padding:1rem; border-bottom:1px solid var(--border); background:#fff; }
     .notif-item.unread { background:var(--accent-light); }
-
-    /* ---- NEW MESSAGE/PROFILE STYLES ---- */
-    .message-bubble { background: #f0f4f8; padding: 0.8rem; border-radius: 12px; margin-bottom: 0.5rem; max-width: 80%; word-wrap: break-word; }
-    .message-bubble.mine { background: rgba(42,157,143,0.12); margin-left: auto; text-align: right; }
-    .message-meta { font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.2rem; }
-    .profile-pic { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; background: #e9f7f5; }
-    .profile-verified { display: inline-block; background: #4caf50; color: white; padding: 0.2rem 0.7rem; border-radius: 12px; font-size: 0.75rem; margin-left: 0.5rem; }
-
+    .message-bubble { background:#f0f4f8; padding:0.8rem; border-radius:12px; margin-bottom:0.5rem; max-width:80%; word-wrap:break-word; }
+    .message-bubble.mine { background:rgba(42,157,143,0.12); margin-left:auto; text-align:right; }
+    .message-meta { font-size:0.75rem; color:var(--text-secondary); margin-top:0.2rem; }
+    .profile-pic { width:80px; height:80px; border-radius:50%; object-fit:cover; background:#e9f7f5; }
+    .profile-verified { display:inline-block; background:#4caf50; color:white; padding:0.2rem 0.7rem; border-radius:12px; font-size:0.75rem; margin-left:0.5rem; }
     @media(max-width:768px) { .nav-links { position:fixed; top:70px; left:0; width:100%; background:#111; flex-direction:column; gap:0; padding:1rem 0; transform:translateY(-150%); transition:transform 0.3s ease; box-shadow:0 4px 20px rgba(0,0,0,0.3); } .nav-links.show { transform:translateY(0); } .nav-links a { display:block; padding:0.8rem 2rem; border-left:4px solid transparent; color:#ccc; } .nav-links a:hover,.nav-links a.active { border-left-color:var(--accent); background:rgba(255,255,255,0.05); color:#fff; } .menu-toggle { display:block; } .admin-layout { flex-direction:column; } }
   </style>
 </head>
@@ -454,40 +439,36 @@ if (isset($_GET['action'])) {
     <section id="editProduct" class="page"><h2>Edit Product</h2><div class="card" style="max-width:500px;"><form id="editForm"><input type="hidden" id="editId"><div class="form-group"><label>Product Name</label><input type="text" class="form-control" id="editName" required></div><div class="form-group"><label>Description</label><textarea class="form-control" id="editDesc" rows="3" required></textarea></div><div class="form-group"><label>Price (R)</label><input type="number" class="form-control" id="editPrice" min="1" required></div><div class="form-group"><label>Category</label><select class="form-control" id="editCategory" required><option value="Fashion">Fashion</option><option value="Electronics">Electronics</option><option value="Furniture">Furniture</option><option value="Food">Food</option></select></div><div class="form-group"><label>Product Image</label><div class="file-upload-wrapper"><div class="file-upload-trigger" id="editUploadTrigger">Choose new image</div><input type="file" id="editFileInput" accept="image/*"></div><input type="text" class="form-control" id="editImageUrl" placeholder="Image URL" style="margin-top:0.5rem;"><img id="editImagePreview" class="image-preview" alt="Preview"></div><button type="submit" class="btn">Update Product</button><button type="button" class="btn btn-outline" onclick="showPage('myListings')">Cancel</button></form></div></section>
 
     <section id="myListings" class="page"><h2>My Listings</h2><div class="card" style="margin-bottom:1rem;"><a href="#" class="btn btn-sm" onclick="showPage('sell')">+ Add New Listing</a></div><div id="myListingsContainer"></div></section>
-
     <section id="mySales" class="page"><h2>My Sales (Requests for my products)</h2><div id="mySalesContainer"></div></section>
-
     <section id="favorites" class="page"><h2>My Favorites</h2><div class="product-grid" id="favoritesGrid"></div></section>
-
     <section id="notifications" class="page"><h2>Notifications</h2><div id="notificationsContainer"></div></section>
 
     <section id="about" class="page"><h2>About KasiTrade</h2><div class="card" style="margin-top:1.5rem;"><p>KasiTrade is a community‑driven marketplace built for South African townships. We connect buyers and sellers directly, making it easy for anyone to start a side hustle or find great deals locally.</p><p style="margin-top:1rem;">Our mission is to empower informal traders and individuals with a secure, simple platform that works on any device, even with limited data.</p></div></section>
-
     <section id="contact" class="page"><h2>Contact Us</h2><div class="card" style="max-width:500px;margin-top:1.5rem;"><p>Email: support@kasitrade.co.za</p><p>WhatsApp: +27 67 064 3457</p><p>Based in Midrand, Johannesburg</p></div></section>
 
     <section id="login" class="page"><h2>Login</h2><div class="card" style="max-width:400px;margin-top:1.5rem;"><form id="loginForm"><div class="form-group"><label>Email</label><input type="email" class="form-control" id="loginEmail" required></div><div class="form-group"><label>Password</label><input type="password" class="form-control" id="loginPassword" required></div><button type="submit" class="btn">Sign In</button></form><p style="margin-top:1rem;font-size:0.9rem;">Don't have an account? <a href="#" onclick="showPage('register')">Register here</a></p></div></section>
 
     <section id="register" class="page">
-  <h2>Register</h2>
-  <div class="card" style="max-width:400px;margin-top:1.5rem;">
-    <form id="registerForm" enctype="multipart/form-data">
-      <div class="form-group"><label>First Name</label><input type="text" class="form-control" id="regName" required></div>
-      <div class="form-group"><label>Surname</label><input type="text" class="form-control" id="regSurname" required></div>
-      <div class="form-group"><label>Email</label><input type="email" class="form-control" id="regEmail" required></div>
-      <div class="form-group"><label>Password</label><input type="password" class="form-control" id="regPassword" required minlength="4"></div>
-      <div class="form-group">
-        <label>Profile Picture (optional)</label>
-        <div class="file-upload-wrapper">
-          <div class="file-upload-trigger" id="regProfilePicTrigger">Choose image</div>
-          <input type="file" id="regProfilePicInput" accept="image/*" style="display:none;">
-        </div>
-        <img id="regProfilePicPreview" class="image-preview" style="max-width:100px; max-height:100px; border-radius:50%; margin-top:0.5rem;">
+      <h2>Register</h2>
+      <div class="card" style="max-width:400px;margin-top:1.5rem;">
+        <form id="registerForm" enctype="multipart/form-data">
+          <div class="form-group"><label>First Name</label><input type="text" class="form-control" id="regName" required></div>
+          <div class="form-group"><label>Surname</label><input type="text" class="form-control" id="regSurname" required></div>
+          <div class="form-group"><label>Email</label><input type="email" class="form-control" id="regEmail" required></div>
+          <div class="form-group"><label>Password</label><input type="password" class="form-control" id="regPassword" required minlength="4"></div>
+          <div class="form-group">
+            <label>Profile Picture (optional)</label>
+            <div class="file-upload-wrapper">
+              <div class="file-upload-trigger" id="regProfilePicTrigger">Choose image</div>
+              <input type="file" id="regProfilePicInput" accept="image/*" style="display:none;">
+            </div>
+            <img id="regProfilePicPreview" class="image-preview" style="max-width:100px; max-height:100px; border-radius:50%; margin-top:0.5rem;">
+          </div>
+          <button type="submit" class="btn">Create Account</button>
+        </form>
+        <p style="margin-top:1rem;font-size:0.9rem;">Already have an account? <a href="#" onclick="showPage('login')">Login</a></p>
       </div>
-      <button type="submit" class="btn">Create Account</button>
-    </form>
-    <p style="margin-top:1rem;font-size:0.9rem;">Already have an account? <a href="#" onclick="showPage('login')">Login</a></p>
-  </div>
-</section>
+    </section>
 
     <section id="profile" class="page">
       <h2>My Profile</h2>
@@ -555,8 +536,8 @@ if (isset($_GET['action'])) {
   <footer class="main-footer"><div class="container"><p>&copy; 2026 KasiTrade. Built for the Kasi, by the Kasi.</p></div></footer>
 
   <script>
-    const API_BASE = window.location.pathname + '?action=';
     let currentUser = <?php echo json_encode(getCurrentUser()); ?>;
+    const API_BASE = window.location.pathname + '?action=';
     let currentMessageReceiverId = null;
 
     async function api(action, data = {}, method = 'POST') {
@@ -682,13 +663,26 @@ if (isset($_GET['action'])) {
         const content = document.getElementById('adminContent');
         if (tab === 'stats') { const stats = await api('adminStats', {}, 'GET'); content.innerHTML = `<div class="stat-cards"><div class="stat-card"><div class="number">${stats.products}</div>Products</div><div class="stat-card"><div class="number">${stats.users}</div>Users</div><div class="stat-card"><div class="number">${stats.orders}</div>Orders</div></div>`; }
         else if (tab === 'productsList') { const products = await fetchProducts(); content.innerHTML = '<h3>All Products</h3><div class="product-grid">' + products.map(p => `<div class="card"><strong>${p.name}</strong><br>R${p.price} - ${p.seller_name}</div>`).join('') + '</div>'; }
-        else if (tab === 'usersList') { const users = await api('adminGetUsers', {}, 'GET'); content.innerHTML = '<h3>All Users</h3>' + users.map(u => `<div class="card" style="margin-bottom:0.5rem;"><strong>${u.name} ${u.surname || ''}</strong> (${u.email})<br><small>Role: ${u.role} | Verified: ${u.is_verified ? 'Yes' : 'No'}</small></div>`).join(''); }
+        else if (tab === 'usersList') {
+            const users = await api('adminGetUsers', {}, 'GET');
+            content.innerHTML = '<h3>All Users</h3>' + users.map(u => `
+                <div class="card" style="margin-bottom:0.5rem;">
+                    <strong>${u.name} ${u.surname || ''}</strong> (${u.email})<br>
+                    <small>Role: ${u.role} | Verified: ${u.is_verified ? 'Yes' : 'No'}</small>
+                    <br>
+                    <button class="btn btn-sm" onclick="toggleVerification(${u.id})">
+                        ${u.is_verified ? 'Unverify' : 'Verify'}
+                    </button>
+                </div>
+            `).join('');
+        }
         else if (tab === 'ordersManagement') { const orders = await api('adminGetAllOrders', {}, 'GET'); content.innerHTML = '<h3>All Orders</h3>' + (orders.length ? orders.map(o => `<div class="card" style="margin-bottom:0.5rem;"><strong>${o.product_name}</strong> - R${o.product_price}<br>Buyer: ${o.buyer_email} | Seller: ${o.seller_email}<br><small>${o.created_at} | <span class="badge ${o.status.toLowerCase()}">${o.status}</span></small><div style="margin-top:0.5rem;"><button class="btn btn-sm" onclick="updateOrderStatus(${o.id}, 'Accepted')">Accept</button><button class="btn btn-sm" style="background:#4caf50; color:#fff;" onclick="updateOrderStatus(${o.id}, 'Completed')">Complete</button><button class="btn btn-sm btn-danger" onclick="updateOrderStatus(${o.id}, 'Cancelled')">Cancel</button></div></div>`).join('') : '<p>No orders yet.</p>'); }
         else if (tab === 'featuredManagement') { const products = await fetchProducts(); content.innerHTML = '<h3>Manage Featured Products</h3><p>Select products to feature on the homepage.</p>' + products.map(p => `<div class="card list-item" style="margin-bottom:0.3rem;"><span>${p.name} (R${p.price})</span><label><input type="checkbox" ${p.is_featured ? 'checked' : ''} onchange="toggleFeatured(${p.id}, this.checked)"> Featured</label></div>`).join(''); }
     }
 
     window.toggleFeatured = async function(id, isFeatured) { await api('adminToggleFeatured', { product_id: id, is_featured: isFeatured }, 'POST'); showAdminTab('featuredManagement'); };
     window.updateOrderStatus = async function(orderId, newStatus) { try { await api('updateOrderStatus', { order_id: orderId, status: newStatus }, 'POST'); alert(`Order marked as ${newStatus}.`); showAdminTab('ordersManagement'); } catch (err) { alert(err.message); } };
+    window.toggleVerification = async function(userId) { try { await api('adminToggleVerification', { user_id: userId }, 'POST'); showAdminTab('usersList'); } catch (err) { alert(err.message); } };
     async function renderAdminStats() { showAdminTab('stats'); }
 
     async function renderProfile() {
@@ -750,55 +744,35 @@ if (isset($_GET['action'])) {
     });
 
     document.getElementById('registerForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const fileInput = document.getElementById('regProfilePicInput');
-    const formData = new FormData();
-    formData.append('name', document.getElementById('regName').value);
-    formData.append('surname', document.getElementById('regSurname').value);
-    formData.append('email', document.getElementById('regEmail').value);
-    formData.append('password', document.getElementById('regPassword').value);
-    if (fileInput.files.length > 0) {
-        formData.append('image', fileInput.files[0]);
-    }
-    try {
-        const res = await fetch(window.location.pathname + '?action=register', {
-            method: 'POST',
-            body: formData
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || 'Registration failed');
-        alert('Registration successful! Please login.');
-        showPage('login');
-    } catch (err) { alert(err.message); }
-});
+        e.preventDefault();
+        const fileInput = document.getElementById('regProfilePicInput');
+        const formData = new FormData();
+        formData.append('name', document.getElementById('regName').value);
+        formData.append('surname', document.getElementById('regSurname').value);
+        formData.append('email', document.getElementById('regEmail').value);
+        formData.append('password', document.getElementById('regPassword').value);
+        if (fileInput.files.length > 0) formData.append('image', fileInput.files[0]);
+        try {
+            const res = await fetch(window.location.pathname + '?action=register', { method: 'POST', body: formData });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Registration failed');
+            alert('Registration successful! Please login.');
+            showPage('login');
+        } catch (err) { alert(err.message); }
+    });
 
-document.getElementById('regProfilePicTrigger').addEventListener('click', () => {
-    document.getElementById('regProfilePicInput').click();
-});
-document.getElementById('regProfilePicInput').addEventListener('change', function() {
-    const file = this.files[0];
-    if (file) {
-        if (file.size > 2 * 1024 * 1024) { alert('Image too large (max 2MB).'); this.value = ''; return; }
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            document.getElementById('regProfilePicPreview').src = e.target.result;
-            document.getElementById('regProfilePicPreview').style.display = 'block';
-        };
-        reader.readAsDataURL(file);
-    }
-});
+    document.getElementById('regProfilePicTrigger').addEventListener('click', () => document.getElementById('regProfilePicInput').click());
+    document.getElementById('regProfilePicInput').addEventListener('change', function() {
+        const file = this.files[0];
+        if (file) {
+            if (file.size > 2 * 1024 * 1024) { alert('Image too large (max 2MB).'); this.value = ''; return; }
+            const reader = new FileReader();
+            reader.onload = (e) => { document.getElementById('regProfilePicPreview').src = e.target.result; document.getElementById('regProfilePicPreview').style.display = 'block'; };
+            reader.readAsDataURL(file);
+        }
+    });
 
-    document.getElementById('loginForm').addEventListener('submit', async function(e) { 
-        e.preventDefault(); 
-        const data = { email: document.getElementById('loginEmail').value, password: document.getElementById('loginPassword').value }; 
-        try { const res = await api('login', data, 'POST'); 
-        currentUser = res.user; updateAuthUI(); 
-        alert(`Welcome, ${currentUser.name}!`); 
-        showPage('home'); 
-    } catch (err) { 
-        alert(err.message); 
-    } 
-});
+    document.getElementById('loginForm').addEventListener('submit', async function(e) { e.preventDefault(); const data = { email: document.getElementById('loginEmail').value, password: document.getElementById('loginPassword').value }; try { const res = await api('login', data, 'POST'); currentUser = res.user; updateAuthUI(); alert(`Welcome, ${currentUser.name}!`); showPage('home'); } catch (err) { alert(err.message); } });
 
     document.getElementById('searchInput').addEventListener('input', filterProducts);
     document.getElementById('categoryFilter').addEventListener('change', filterProducts);
