@@ -59,6 +59,26 @@ CREATE TABLE IF NOT EXISTS `notifications` (
 INSERT INTO `users` (`email`, `name`, `password_hash`, `role`) VALUES
 ('admin@kasitrade.co.za', 'Admin', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin');
 
+-- Add profile fields to users table
+ALTER TABLE `users` 
+  ADD COLUMN `surname` VARCHAR(255) NOT NULL DEFAULT '' AFTER `name`,
+  ADD COLUMN `profile_image` VARCHAR(500) DEFAULT NULL AFTER `surname`,
+  ADD COLUMN `is_verified` BOOLEAN NOT NULL DEFAULT FALSE AFTER `profile_image`;
+
+-- Create messages table for buyer‑seller chat
+CREATE TABLE IF NOT EXISTS `messages` (
+  `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `order_id` INT UNSIGNED NOT NULL,
+  `sender_id` INT UNSIGNED NOT NULL,
+  `receiver_id` INT UNSIGNED NOT NULL,
+  `message` TEXT NOT NULL,
+  `is_read` BOOLEAN NOT NULL DEFAULT FALSE,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`sender_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`receiver_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 -- Seed products 
 INSERT INTO `products` (`seller_id`, `name`, `description`, `price`, `category`, `image_path`, `is_featured`) VALUES
 (1, 'Archive Sneakers', 'Gently used size 8 sneakers.', 350, 'Fashion', 'sneakerss.jpg', 1),
