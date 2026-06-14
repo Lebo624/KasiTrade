@@ -19,10 +19,13 @@ if (!$user || !password_verify($password, $user['password_hash'])) {
 }
 
 $_SESSION['user'] = [
-    'id'    => $user['id'],
-    'email' => $user['email'],
-    'name'  => $user['name'],
-    'role'  => $user['role'],
+    'id'            => $user['id'],
+    'email'         => $user['email'],
+    'name'          => $user['name'],
+    'surname'       => $user['surname'],
+    'profile_image' => $user['profile_image'],
+    'is_verified'   => $user['is_verified'],
+    'role'          => $user['role'],
 ];
 
 echo json_encode([
