@@ -28,16 +28,66 @@ if (isset($_GET['action'])) {
     header('Content-Type: application/json');
     $action = $_GET['action'];
 
-    if ($action === 'register') {
-        $data = json_decode(file_get_contents('php://input'), true);
-        $name = trim($data['name'] ?? ''); $email = trim($data['email'] ?? ''); $password = $data['password'] ?? '';
-        if (!$name || !$email || !$password) { http_response_code(400); echo json_encode(['error' => 'All fields required']); exit; }
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) { http_response_code(400); echo json_encode(['error' => 'Invalid email']); exit; }
-        $stmt = $pdo->prepare('SELECT id FROM users WHERE email = ?'); $stmt->execute([$email]);
-        if ($stmt->fetch()) { http_response_code(409); echo json_encode(['error' => 'Email already registered']); exit; }
+        if ($action === 'register') {
+        if (!empty($_FILES) && isset($_FILES['image'])) {
+            $name    = trim($_POST['name'] ?? '');
+            $surname = trim($_POST['surname'] ?? '');
+            $email   = trim($_POST['email'] ?? '');
+            $password = $_POST['password'] ?? '';
+        } else {
+            $raw = json_decode(file_get_contents('php://input'), true);
+            $name    = trim($raw['name'] ?? '');
+            $surname = trim($raw['surname'] ?? '');
+            $email   = trim($raw['email'] ?? '');
+            $password = $raw['password'] ?? '';
+        }
+
+        if (!$name || !$surname || !$email || !$password) {
+            http_response_code(400);
+            echo json_encode(['error' => 'All fields required']);
+            exit;
+        }
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid email']);
+            exit;
+        }
+
+        $stmt = $pdo->prepare('SELECT id FROM users WHERE email = ?');
+        $stmt->execute([$email]);
+        if ($stmt->fetch()) {
+            http_response_code(409);
+            echo json_encode(['error' => 'Email already registered']);
+            exit;
+        }
+
         $hash = password_hash($password, PASSWORD_DEFAULT);
-        $stmt = $pdo->prepare('INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)'); $stmt->execute([$name, $email, $hash]);
-        echo json_encode(['success' => true, 'message' => 'Registration successful']); exit;
+        $stmt = $pdo->prepare('INSERT INTO users (name, surname, email, password_hash) VALUES (?, ?, ?, ?)');
+        $stmt->execute([$name, $surname, $email, $hash]);
+        $newUserId = $pdo->lastInsertId();
+
+        // Handle profile picture upload if present
+        $profileImage = null;
+        if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+            $file = $_FILES['image'];
+            $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            if (in_array($ext, ['jpg','jpeg','png','webp'])) {
+                if ($file['size'] <= 2 * 1024 * 1024) {
+                    $newName = 'profile_' . $newUserId . '_' . time() . '.' . $ext;
+                    $uploadDir = __DIR__ . '/uploads/profiles/';
+                    if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+                    $dest = $uploadDir . $newName;
+                    if (move_uploaded_file($file['tmp_name'], $dest)) {
+                        $profileImage = 'uploads/profiles/' . $newName;
+                        $upd = $pdo->prepare('UPDATE users SET profile_image = ? WHERE id = ?');
+                        $upd->execute([$profileImage, $newUserId]);
+                    }
+                }
+            }
+        }
+
+        echo json_encode(['success' => true, 'message' => 'Registration successful']);
+        exit;
     }
 
     if ($action === 'login') {
@@ -298,8 +348,8 @@ if (isset($_GET['action'])) {
     .header-inner { display:flex; align-items:center; justify-content:space-between; height:70px; }
     .logo { font-size:2rem; font-weight:800; color:var(--accent); }
     .logo span { color:#fff; }
-    .nav-links { display:flex; gap:2rem; list-style:none; align-items:center; }
-    .nav-links a { color:#ccc; font-weight:600; padding:0.5rem 0; border-bottom:3px solid transparent; transition:all var(--transition); font-size:0.95rem; cursor:pointer; position:relative; }
+    .nav-links { display: flex; gap: 1.8rem; list-style: none; align-items: center;}
+    .nav-links a {color: #cccccc; font-weight: 600; font-size: 0.95rem; padding: 0.5rem 0.2rem; border-bottom: 3px solid transparent; transition: all var(--transition); cursor: pointer; position: relative; text-decoration: none;        }
     .nav-links a:hover,.nav-links a.active { color:#fff; border-bottom-color:var(--accent); }
     .badge-pill { position:absolute; top:-8px; right:-16px; background:var(--accent); color:#fff; border-radius:12px; padding:0.1rem 0.5rem; font-size:0.7rem; font-weight:700; min-width:18px; text-align:center; }
     .menu-toggle { display:none; background:none; border:none; color:#fff; font-size:2rem; cursor:pointer; }
@@ -417,7 +467,27 @@ if (isset($_GET['action'])) {
 
     <section id="login" class="page"><h2>Login</h2><div class="card" style="max-width:400px;margin-top:1.5rem;"><form id="loginForm"><div class="form-group"><label>Email</label><input type="email" class="form-control" id="loginEmail" required></div><div class="form-group"><label>Password</label><input type="password" class="form-control" id="loginPassword" required></div><button type="submit" class="btn">Sign In</button></form><p style="margin-top:1rem;font-size:0.9rem;">Don't have an account? <a href="#" onclick="showPage('register')">Register here</a></p></div></section>
 
-    <section id="register" class="page"><h2>Register</h2><div class="card" style="max-width:400px;margin-top:1.5rem;"><form id="registerForm"><div class="form-group"><label>Full Name</label><input type="text" class="form-control" id="regName" required></div><div class="form-group"><label>Email</label><input type="email" class="form-control" id="regEmail" required></div><div class="form-group"><label>Password</label><input type="password" class="form-control" id="regPassword" required minlength="4"></div><button type="submit" class="btn">Create Account</button></form><p style="margin-top:1rem;font-size:0.9rem;">Already have an account? <a href="#" onclick="showPage('login')">Login</a></p></div></section>
+    <section id="register" class="page">
+  <h2>Register</h2>
+  <div class="card" style="max-width:400px;margin-top:1.5rem;">
+    <form id="registerForm" enctype="multipart/form-data">
+      <div class="form-group"><label>First Name</label><input type="text" class="form-control" id="regName" required></div>
+      <div class="form-group"><label>Surname</label><input type="text" class="form-control" id="regSurname" required></div>
+      <div class="form-group"><label>Email</label><input type="email" class="form-control" id="regEmail" required></div>
+      <div class="form-group"><label>Password</label><input type="password" class="form-control" id="regPassword" required minlength="4"></div>
+      <div class="form-group">
+        <label>Profile Picture (optional)</label>
+        <div class="file-upload-wrapper">
+          <div class="file-upload-trigger" id="regProfilePicTrigger">Choose image</div>
+          <input type="file" id="regProfilePicInput" accept="image/*" style="display:none;">
+        </div>
+        <img id="regProfilePicPreview" class="image-preview" style="max-width:100px; max-height:100px; border-radius:50%; margin-top:0.5rem;">
+      </div>
+      <button type="submit" class="btn">Create Account</button>
+    </form>
+    <p style="margin-top:1rem;font-size:0.9rem;">Already have an account? <a href="#" onclick="showPage('login')">Login</a></p>
+  </div>
+</section>
 
     <section id="profile" class="page">
       <h2>My Profile</h2>
@@ -679,8 +749,56 @@ if (isset($_GET['action'])) {
         }
     });
 
-    document.getElementById('registerForm').addEventListener('submit', async function(e) { e.preventDefault(); const data = { name: document.getElementById('regName').value, email: document.getElementById('regEmail').value, password: document.getElementById('regPassword').value }; try { await api('register', data, 'POST'); alert('Registered!'); showPage('login'); } catch (err) { alert(err.message); } });
-    document.getElementById('loginForm').addEventListener('submit', async function(e) { e.preventDefault(); const data = { email: document.getElementById('loginEmail').value, password: document.getElementById('loginPassword').value }; try { const res = await api('login', data, 'POST'); currentUser = res.user; updateAuthUI(); alert(`Welcome, ${currentUser.name}!`); showPage('home'); } catch (err) { alert(err.message); } });
+    document.getElementById('registerForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const fileInput = document.getElementById('regProfilePicInput');
+    const formData = new FormData();
+    formData.append('name', document.getElementById('regName').value);
+    formData.append('surname', document.getElementById('regSurname').value);
+    formData.append('email', document.getElementById('regEmail').value);
+    formData.append('password', document.getElementById('regPassword').value);
+    if (fileInput.files.length > 0) {
+        formData.append('image', fileInput.files[0]);
+    }
+    try {
+        const res = await fetch(window.location.pathname + '?action=register', {
+            method: 'POST',
+            body: formData
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Registration failed');
+        alert('Registration successful! Please login.');
+        showPage('login');
+    } catch (err) { alert(err.message); }
+});
+
+document.getElementById('regProfilePicTrigger').addEventListener('click', () => {
+    document.getElementById('regProfilePicInput').click();
+});
+document.getElementById('regProfilePicInput').addEventListener('change', function() {
+    const file = this.files[0];
+    if (file) {
+        if (file.size > 2 * 1024 * 1024) { alert('Image too large (max 2MB).'); this.value = ''; return; }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            document.getElementById('regProfilePicPreview').src = e.target.result;
+            document.getElementById('regProfilePicPreview').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    }
+});
+
+    document.getElementById('loginForm').addEventListener('submit', async function(e) { 
+        e.preventDefault(); 
+        const data = { email: document.getElementById('loginEmail').value, password: document.getElementById('loginPassword').value }; 
+        try { const res = await api('login', data, 'POST'); 
+        currentUser = res.user; updateAuthUI(); 
+        alert(`Welcome, ${currentUser.name}!`); 
+        showPage('home'); 
+    } catch (err) { 
+        alert(err.message); 
+    } 
+});
 
     document.getElementById('searchInput').addEventListener('input', filterProducts);
     document.getElementById('categoryFilter').addEventListener('change', filterProducts);
