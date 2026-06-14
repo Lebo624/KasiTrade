@@ -55,41 +55,34 @@ CREATE TABLE IF NOT EXISTS `notifications` (
   FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+ALTER TABLE `products`
+  ADD CONSTRAINT `products_ibfk_1` FOREIGN KEY (`seller_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+COMMIT;
+
+ALTER TABLE `products`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
+
+  ALTER TABLE `products`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `seller_id` (`seller_id`);
+  
 -- Seed admin user 
 INSERT INTO `users` (`email`, `name`, `password_hash`, `role`) VALUES
 ('admin@kasitrade.co.za', 'Admin', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin');
 
--- Add profile fields to users table
-ALTER TABLE `users` 
-  ADD COLUMN `surname` VARCHAR(255) NOT NULL DEFAULT '' AFTER `name`,
-  ADD COLUMN `profile_image` VARCHAR(500) DEFAULT NULL AFTER `surname`,
-  ADD COLUMN `is_verified` BOOLEAN NOT NULL DEFAULT FALSE AFTER `profile_image`;
-
--- Create messages table for buyer‑seller chat
-CREATE TABLE IF NOT EXISTS `messages` (
-  `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  `order_id` INT UNSIGNED NOT NULL,
-  `sender_id` INT UNSIGNED NOT NULL,
-  `receiver_id` INT UNSIGNED NOT NULL,
-  `message` TEXT NOT NULL,
-  `is_read` BOOLEAN NOT NULL DEFAULT FALSE,
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE CASCADE,
-  FOREIGN KEY (`sender_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
-  FOREIGN KEY (`receiver_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
-) ENGINE=InnoDB;
-
 -- Seed products 
-INSERT INTO `products` (`seller_id`, `name`, `description`, `price`, `category`, `image_path`, `is_featured`) VALUES
-(1, 'Archive Sneakers', 'Gently used size 8 sneakers.', 350, 'Fashion', 'sneakerss.jpg', 1),
-(1, 'iPhone 11', 'Good condition, 64GB.', 3500, 'Electronics', 'phone.jpg', 1),
-(1, '2‑Seater Couch', 'Grey fabric, like new.', 800, 'Furniture', 'https://placehold.co/400x250/2a9d8f/ffffff?text=Couch', 0),
-(1, 'Homemade Bread', 'Fresh daily.', 15, 'Food', 'https://placehold.co/400x250/2a9d8f/ffffff?text=Bread', 0),
-(1, 'Denim Jacket', 'Vintage denim, size M.', 250, 'Fashion', 'Jacket.jpg', 1),
-(1, 'Wireless Earbuds', 'BT 5.0, good battery.', 180, 'Electronics', 'https://placehold.co/400x250/2a9d8f/ffffff?text=Earbuds', 0),
-(1, 'Wooden Coffee Table', 'Solid wood.', 550, 'Furniture', 'https://placehold.co/400x250/2a9d8f/ffffff?text=Table', 0),
-(1, 'Vetkoek (6 pack)', 'Delicious!', 30, 'Food', 'https://placehold.co/400x250/2a9d8f/ffffff?text=Vetkoek', 1),
-(1, 'School Shoes', 'Black leather, size 3.', 120, 'Fashion', 'https://placehold.co/400x250/2a9d8f/ffffff?text=Shoes', 0),
-(1, '32inch TV', 'HD Ready.', 900, 'Electronics', 'https://placehold.co/400x250/2a9d8f/ffffff?text=TV', 0),
-(1, 'Plastic Chairs (4)', 'Stackable, white.', 200, 'Furniture', 'https://placehold.co/400x250/2a9d8f/ffffff?text=Chairs', 0),
-(1, 'Achaar (Mango)', 'Spicy mango achaar.', 40, 'Food', 'https://placehold.co/400x250/2a9d8f/ffffff?text=Achaar', 0);
+INSERT INTO `products` (`id`, `seller_id`, `name`, `description`, `price`, `category`, `image_path`, `is_featured`, `created_at`) VALUES
+(1, 1, 'Runners', 'Gently used size 8 running shoes.', '350.00', 'Fashion', 'https://placehold.co/400x250/2a9d8f/ffffff?text= Runners', 1, '2026-06-05 09:26:17'),
+(2, 1, 'Samsung Galaxy A05', 'Grade A condition, 64GB.', '3500.00', 'Electronics', 'https://placehold.co/400x250/2a9d8f/ffffff?text=Samusung A05', 1, '2026-06-05 09:26:17'),
+(3, 1, '2 Seater Couch', 'Grey fabric, like new.', '800.00', 'Furniture', 'https://placehold.co/400x250/2a9d8f/ffffff?text=Couch', 0, '2026-06-05 09:26:17'),
+(4, 1, 'Homemade Bread', 'Fresh daily.', '15.00', 'Food', 'https://placehold.co/400x250/2a9d8f/ffffff?text=Bread', 0, '2026-06-05 09:26:17'),
+(5, 1, 'Denim Jacket', 'Vintage denim, size M.', '250.00', 'Fashion', 'https://placehold.co/400x250/2a9d8f/ffffff?text=Jacket', 1, '2026-06-05 09:26:17'),
+(6, 1, 'Wireless Earbuds', 'BT 5.0, good battery.', '180.00', 'Electronics', 'https://placehold.co/400x250/2a9d8f/ffffff?text=Earbuds', 0, '2026-06-05 09:26:17'),
+(7, 1, 'Wooden Coffee Table', 'Solid wood.', '550.00', 'Furniture', 'https://placehold.co/400x250/2a9d8f/ffffff?text=Table', 0, '2026-06-05 09:26:17'),
+(8, 1, 'Vetkoek (6 pack)', 'Delicious!', '30.00', 'Food', 'https://placehold.co/400x250/2a9d8f/ffffff?text=Vetkoek', 1, '2026-06-05 09:26:17'),
+(9, 1, 'School Shoes', 'Black leather, size 3.', '120.00', 'Fashion', 'https://placehold.co/400x250/2a9d8f/ffffff?text=Shoes', 0, '2026-06-05 09:26:17'),
+(10, 1, '32 inch TV', 'HD Ready.', '900.00', 'Electronics', 'https://placehold.co/400x250/2a9d8f/ffffff?text=TV', 0, '2026-06-05 09:26:17'),
+(11, 1, 'Plastic Chairs (4)', 'Stackable, white.', '200.00', 'Furniture', 'https://placehold.co/400x250/2a9d8f/ffffff?text=Chairs', 0, '2026-06-05 09:26:17'),
+(12, 1, 'Achaar (Mango)', 'Spicy mango achaar.', '40.00', 'Food', 'https://placehold.co/400x250/2a9d8f/ffffff?text=Achaar', 0, '2026-06-05 09:26:17'),
+(14, 2, 'Camera', 'Second hand camera', '600.00', 'Electronics', 'https://images.pexels.com/photos/90946/pexels-photo-90946.jpeg?w=400&h=250&fit=crop', 0, '2026-06-05 15:55:01'),
+(16, 3, 'Heater', 'An electric powered heater, with gas.', '500.00', 'Electronics', 'https://placehold.co/400x250/2a9d8f/ffffff?text=Heater', 0, '2026-06-09 12:51:10');
